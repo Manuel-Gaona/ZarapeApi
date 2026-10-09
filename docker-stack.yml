@@ -1,0 +1,52 @@
+# Stack de Docker Swarm para la API de El Zarape.
+# Se despliega desde Portainer (Stacks > Add stack > Repository).
+#
+# Variables que se definen en Portainer:
+#   SECRET_KEY, JWT_SECRET_KEY   obligatorias
+#   ADMIN_PASSWORD               obligatoria (usuario administrador inicial)
+#   API_DOMAIN                   dominio de la API       (por defecto zarapeapi.705905.xyz)
+#   CORS_ORIGINS                 URL del frontend        (por defecto https://zarape.705905.xyz)
+#   SEED_ON_START                "true" carga los datos de ejemplo si la base está vacía
+
+services:
+  api:
+    image: ghcr.io/manuel-gaona/zarapeapi:${IMAGE_TAG:-latest}
+    environment:
+      - SECRET_KEY=${SECRET_KEY:?Define SECRET_KEY en Portainer}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:?Define JWT_SECRET_KEY en Portainer}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://zarape.705905.xyz}
+      - ADMIN_USUARIO=${ADMIN_USUARIO:-admin}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:?Define ADMIN_PASSWORD en Portainer}
+      - SEED_ON_START=${SEED_ON_START:-false}
+    volumes:
+      # Base de datos SQLite e imágenes subidas: sobreviven a cada despliegue
+      - zarape_db:/app/instance
+      - zarape_uploads:/app/uploads
+    networks:
+      - traefik_proxy
+    # Sin "ports": el único acceso es a través de Traefik
+    deploy:
+      # SQLite admite un solo proceso escritor: no subir las réplicas
+      replicas: 1
+      placement:
+        constraints: [node.role == manager]
+      update_config:
+        # Primero se detiene la versión anterior (no puede haber dos usando la base)
+        order: stop-first
+        failure_action: rollback
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.http.routers.zarape-api.rule=Host(`${API_DOMAIN:-zarapeapi.705905.xyz}`)"
+        - "traefik.http.routers.zarape-api.entrypoints=websecure"
+        - "traefik.http.routers.zarape-api.tls.certresolver=le"
+        - "traefik.http.services.zarape-api.loadbalancer.server.port=5000"
+
+networks:
+  traefik_proxy:
+    external: true
+
+volumes:
+  zarape_db:
+  zarape_uploads:

@@ -1,0 +1,11 @@
+# Lo que NO debe entrar en la imagen
+.git
+.github
+venv
+__pycache__
+*.pyc
+
+# Secretos y datos locales
+.env
+instance
+uploads
